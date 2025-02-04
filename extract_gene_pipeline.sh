@@ -12,6 +12,6 @@ feature_type=${5:-"rrna"}
 
 
 "$cnsg_script_dir"summary_download.sh -i "$taxon" -o "$taxon" -p GCF ${6:+ -l "$6"}
-uv run "$script_dir"filter.py "$taxon"/"$taxon"_"$today".tsv "$taxon"/"$taxon"_filtered_"$today".tsv
+uv run --project "$script_dir" "$script_dir"filter.py "$taxon"/"$taxon"_"$today".tsv "$taxon"/"$taxon"_filtered_"$today".tsv
 "$cnsg_script_dir"tsv_datasets_downloader.sh -i "$taxon"/"$taxon"_filtered_"$today".tsv -o "$taxon"/ --annotate=true
-uv run "$script_dir"extract_gene.py "$taxon"/GENOMIC1/ "$taxon"/GFF1/ "$gene"/ "$gene" "$filters" "$feature_type"
+uv run --project "$script_dir" "$script_dir"extract_gene.py "$taxon"/GENOMIC1/ "$taxon"/GFF1/ "$gene"/ "$gene" "$filters" "$feature_type"
