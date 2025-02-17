@@ -23,25 +23,23 @@ def preliminary_bs(df: pl.DataFrame):
 
 def filter_and_select_best(df: pl.DataFrame, columns: list[str]) -> pl.DataFrame:
     # Use lazy evaluation for efficiency
-    lf = df.lazy()
 
-    lf = lf.with_columns(
+    df = df.with_columns(
         pl.max("Assembly Stats Total Sequence Length")
         .over("Organism Name2")
         .alias("max_length")
     )
 
-    lf = lf.filter(
+    df = df.filter(
         pl.col("Assembly Stats Total Sequence Length") > 0.9 * pl.col("max_length")
     )
 
-    lf = (
-        lf.sort("Assembly Stats Contig N50", descending=True)
+    result = (
+        df.sort("Assembly Stats Contig N50", descending=True)
         .group_by("Organism Name2", maintain_order=True)
         .first()
     )
 
-    result = lf.collect()  # Collect the lazyframe when needed
     preliminary_bs(result)
     result = result.drop("Organism Name2").select(columns)
     return result
@@ -63,13 +61,13 @@ if __name__ == "__main__":
         "\t"
     )  # Simplified split
 
-    df = pl.scan_csv(input_file, separator="\t", with_column_names=columns)
+    df = pl.read_csv(input_file, separator="\t")
 
     df = df.with_columns(
         df["Organism Name"]
         .map_elements(first_two_words, return_dtype=pl.String)
         .alias("Organism Name2")
-    ).collect()  # collect here since map_elements is eager
+    ) 
 
     preliminary_bs(df)
     df2 = filter_and_select_best(df, columns)

@@ -24,7 +24,7 @@ def take_input(min_len=None):
 
 def build_record_id(fna_file: str) -> str:
     GCX, code, genusspecies, strain = fna_file.split("_")
-    strain = strain.rstrip(".")
+    strain = strain.split(".")[0]
     return f"{GCX}_{code} {genusspecies} {strain}"
 
 
@@ -139,7 +139,7 @@ def parse_attributes(attributes):
 
 
 def main():
-    input_fna_dir, input_gff_dir, output_dir, genes,  feature_type, MAX_LEN = take_input(5)
+    input_fna_dir, input_gff_dir, output_dir, genes,  feature_type, MAX_LEN = take_input(6)
     files = os.listdir(input_gff_dir)
     os.makedirs(output_dir, exist_ok=True)
     for file in files:
