@@ -3,7 +3,7 @@ from Bio.SeqRecord import SeqRecord
 import os
 from collections import defaultdict
 from fssw import sliding_window
-
+from multiprocessing import Pool
 
 
 def take_input(min_len=None):
@@ -14,12 +14,10 @@ def take_input(min_len=None):
     if min_len and min_len > len(sys.argv) - 1:
         print(err_msg)
         sys.exit()
-    _, input_fna_dir, input_gff_dir, output_dir, genes,  feature_type, MAX_LEN = (
-        sys.argv
-    )
-    genes = genes.lower().split(",")
-    MAX_LEN=int(MAX_LEN)
-    return input_fna_dir, input_gff_dir, output_dir, genes,  feature_type, MAX_LEN
+    _, input_fna_dir, input_gff_dir, output_dir, genes, feature_type, MAX_LEN = sys.argv
+    genes = tuple(filter(genes.lower().split(",")))
+    MAX_LEN = int(MAX_LEN)
+    return input_fna_dir, input_gff_dir, output_dir, genes, feature_type, MAX_LEN
 
 
 def build_record_id(fna_file: str) -> str:
@@ -33,14 +31,14 @@ def extract_gene(
     fna_file: str,
     output_file: str,
     filename: str,
-    genes: list[str],
+    genes: tuple[str],
     search_feature_type: str,
-    MAX_LEN:int,
+    MAX_LEN: int,
 ):
     """
     Extract regions containing all specified genes exactly once.
     """
-    
+
     features = []
 
     # Parse GFF file to collect relevant features
@@ -51,7 +49,9 @@ def extract_gene(
             cols = line.lower().strip().split("\t")
             if len(cols) < 9:
                 continue
-            seqid, source, feat_type, start_str, end_str, _, strand, _, attributes = cols
+            seqid, source, feat_type, start_str, end_str, _, strand, _, attributes = (
+                cols
+            )
             if feat_type != search_feature_type:
                 continue
             try:
@@ -84,20 +84,19 @@ def extract_gene(
         # Sort features by start position
         sorted_features = sorted(group_features, key=lambda x: x[0])
         num_required = len(required_genes)
-        
-        
+
         # Extract valid clusters from sliding window
         clusters = []
         for chunk in sliding_window(sorted_features, num_required):
             chunk_genes = [gene for _, _, gene in chunk]
-            
+
             # Check if chunk contains all required genes exactly once
             if chunk_genes == genes or chunk_genes == list(reversed(genes)):
                 starts = [start for start, _, _ in chunk]
                 ends = [end for _, end, _ in chunk]
                 min_start = min(starts)
                 max_end = max(ends)
-                if abs(max_end-min_start) < MAX_LEN:
+                if abs(max_end - min_start) < MAX_LEN:
                     clusters.append((min_start, max_end))
 
         # Extract sequences for each valid cluster
@@ -106,17 +105,17 @@ def extract_gene(
             if seqid_upper not in seq_dict:
                 print(f"Sequence ID '{seqid_upper}' not found. Skipping.")
                 continue
-            
+
             seq_record = seq_dict[seqid_upper]
-            sub_seq = seq_record.seq[min_start - 1:max_end]
+            sub_seq = seq_record.seq[min_start - 1 : max_end]
             if strand == "-":
                 sub_seq = sub_seq.reverse_complement()
-            
+
             record_id = build_record_id(filename)
             description = f"{'-'.join(genes)} {strand}"
             record = SeqRecord(sub_seq, id=record_id, description=description)
             records.append(record)
-            
+
             if len(sub_seq) > MAX_LEN:
                 print(f"Sequence too long ({len(sub_seq)}).")
 
@@ -138,25 +137,49 @@ def parse_attributes(attributes):
     return attr_dict
 
 
+def mappable_extract_fn(tup: list):
+    gff_path, fna_path, output_path, fna_filename, genes, feature_type, MAX_LEN = tup
+    extract_gene(
+        gff_path, fna_path, output_path, fna_filename, genes, feature_type, MAX_LEN
+    )
+
+
 def main():
-    input_fna_dir, input_gff_dir, output_dir, genes,  feature_type, MAX_LEN = take_input(6)
-    files = os.listdir(input_gff_dir)
+    apt=os.process_cpu_count()
+    apt= apt if apt is not None else 1
+    apt = round(apt * 0.8)
+    print(f"Using {apt} processes")
+    with Pool(apt) as p:
+        results=tuple(p.imap_unordered(
+            mappable_extract_fn,
+            inputs(),
+            10
+        ))
+    print(f"Processed {len(results)} files")
+
+
+def inputs():
+    input_fna_dir, input_gff_dir, output_dir, genes, feature_type, MAX_LEN = take_input(
+        6
+    )
     os.makedirs(output_dir, exist_ok=True)
+    files = os.listdir(input_gff_dir)
     for file in files:
         if file.endswith(".gff"):
             filename = os.path.splitext(file)[0]
             fna_path = os.path.join(input_fna_dir, f"{filename}.fna")
             gff_path = os.path.join(input_gff_dir, file)
             output_path = os.path.join(output_dir, filename)
-            extract_gene(
+            input = (
                 gff_path,
                 fna_path,
                 output_path,
                 f"{filename}.fna",
                 genes,
                 feature_type,
-                MAX_LEN
+                MAX_LEN,
             )
+            yield input
 
 
 if __name__ == "__main__":
