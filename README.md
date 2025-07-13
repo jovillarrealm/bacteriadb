@@ -4,5 +4,7 @@ eubacteria_pipeline.sh expects the [cnsg-downloader-code scripts.](https://githu
 eubacteria_pipeline.sh <path/to/cnsg-downloader-code> [gene] [ncbi_taxon]
 
 gene name
+
 Example usage: 
+
     eubacteria_pipeline.sh ../cnsg-downloader-code/ #
